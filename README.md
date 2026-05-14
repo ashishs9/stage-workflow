@@ -18,6 +18,7 @@ Before starting, ensure you have the GitHub CLI (`gh`) installed and authenticat
     * **PROJECT_ID:** Enter a unique ID (e.g., `MY_PROJECT_01`). **Note:** You must use this exact same ID when creating the project in DSS later.
     * **Repo Name:** Choose a name for your new private GitHub repository.
     * **Emails:** Provide the Recipient and CC addresses for automated quality reports.
+    * **Infra ID:** Provide the Infrastructure ID (egs ashish-automation)
 
 ---
 
@@ -29,8 +30,6 @@ Once the repository is created, you must configure the environment variables and
     * `DSS_API_KEY`: The API key generated from your DSS user profile or administration settings.
     * `DSS_URL`: The base URL of your Design node (e.g., `https://dss-design.yourcompany.com`).
     * `DSS_AUTO_URL`: The base URL of your Automation node (for deployment).
-3.  **Add Environment Variables:** Under the "Variables" tab, add non-sensitive configuration:
-    * `DSS_DEFAULT_INFRA`: The target infrastructure ID for deployment.
 
 ---
 
