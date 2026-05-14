@@ -8,11 +8,11 @@ on:
       - development
       - production
   
-  # 2. Triggered when a PR to master is opened or merged
+  # 2. Triggered when a PR to master is opened or merged - For now just for closed merges!
   pull_request:
     branches:
       - master
-    types: [opened, synchronize, closed]
+    types: [closed]
 
   workflow_dispatch:
 
