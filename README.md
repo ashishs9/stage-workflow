@@ -1,6 +1,6 @@
 # README: DSS CI/CD Workflow Guide
 
-This document outlines the standardized process for creating, developing, and deploying Dataiku DSS projects using the `stage-workflow` template.
+This document outlines the automated process for creating, developing, and deploying Dataiku DSS projects using the `stage-workflow` template.
 
 ## 1. Initializing a New Repo
 Before starting, ensure you have the GitHub CLI (`gh`) installed and authenticated.
