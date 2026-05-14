@@ -1,0 +1,113 @@
+{
+  "type": "step_based",
+  "name": "PROJECT_QUALITY_CHECK",
+  "active": false,
+  "runAsUser": "admin",
+  "checklists": {
+    "checklists": []
+  },
+  "delayedTriggersBehavior": {
+    "delayWhileRunning": true,
+    "squashDelayedTriggers": true,
+    "suppressTriggersWhileRunning": true
+  },
+  "tags": [],
+  "triggers": [],
+  "reporters": [],
+  "params": {
+    "steps": [
+      {
+        "id": "check_WARNING",
+        "type": "check_dataset",
+        "name": "Consistency Check",
+        "enabled": true,
+        "alwaysShowComment": false,
+        "runConditionType": "RUN_IF_STATUS_MATCH",
+        "runConditionStatuses": [
+          "SUCCESS",
+          "WARNING"
+        ],
+        "runConditionExpression": "",
+        "resetScenarioStatus": false,
+        "delayBetweenRetries": 10,
+        "maxRetriesOnFail": 0,
+        "params": {
+          "checks": [],
+          "handleWarningsAs": "WARNING",
+          "computeAutomaticRules": true,
+          "ignorePartitionSelectionMode": false,
+          "proceedOnFailure": false
+        }
+      },
+      {
+        "id": "report63762278c9fa9eec23bf2b3b2031c8e5",
+        "type": "send_report",
+        "name": "On Failure - Notify Engg",
+        "enabled": true,
+        "comment": "",
+        "alwaysShowComment": false,
+        "runConditionType": "RUN_IF_STATUS_MATCH",
+        "runConditionStatuses": [
+          "ABORTED",
+          "FAILED"
+        ],
+        "runConditionExpression": "",
+        "resetScenarioStatus": true,
+        "delayBetweenRetries": 10,
+        "maxRetriesOnFail": 0,
+        "params": {
+          "failOnMessageNotSent": false,
+          "messaging": {
+            "type": "mail-scenario",
+            "configuration": {
+              "channelId": "public_channel",
+              "subject": "DSS scenario ${scenarioName}: ${outcome}",
+              "recipient": "ashish.shah@dataiku.com",
+              "sendAsHTML": false,
+              "attachments": [],
+              "messageSource": "TEMPLATE_FILE",
+              "templateFormat": "FREEMARKER",
+              "templateName": "default.ftl"
+            }
+          }
+        }
+      },
+      {
+        "id": "report99914b932bd37a50b983c5e7c90ae93b",
+        "type": "send_report",
+        "name": "Send message on Success",
+        "enabled": true,
+        "alwaysShowComment": false,
+        "runConditionType": "RUN_IF_STATUS_MATCH",
+        "runConditionStatuses": [
+          "SUCCESS"
+        ],
+        "runConditionExpression": "",
+        "resetScenarioStatus": false,
+        "delayBetweenRetries": 10,
+        "maxRetriesOnFail": 0,
+        "params": {
+          "failOnMessageNotSent": false,
+          "messaging": {
+            "type": "mail-scenario",
+            "configuration": {
+              "channelId": "public_channel",
+              "subject": "DSS scenario ${scenarioName}: ${outcome}",
+              "recipient": "ashish.shah@dataiku.com",
+              "ccRecipient": "ashkri@gmail.com",
+              "sendAsHTML": false,
+              "attachments": [],
+              "messageSource": "TEMPLATE_FILE",
+              "templateFormat": "FREEMARKER",
+              "templateName": "default.ftl"
+            }
+          }
+        }
+      }
+    ]
+  },
+  "automationLocal": false,
+  "customFields": {},
+  "markedAsTest": false,
+  "__dku_object_version__": 1
+}

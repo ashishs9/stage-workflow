@@ -1,0 +1,45 @@
+name: DSS CI-CD Hybrid Workflow
+
+on:
+  # 1. Triggered whenever a developer pushes to a feature branch
+  push:
+    branches-ignore:
+      - master
+      - development
+      - production
+  
+  # 2. Triggered when a PR to master is opened or merged
+  pull_request:
+    branches:
+      - master
+    types: [opened, synchronize, closed]
+
+  workflow_dispatch:
+
+jobs:
+  dss-pipeline:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install dataiku-api-client
+
+      - name: Execute DSS Logic
+        env:
+          DSS_URL: ${{ secrets.DSS_URL }}
+          DSS_API_KEY: ${{ secrets.DSS_API_KEY }}
+          # Logic to handle different event types
+          EVENT_NAME: ${{ github.event_name }}
+          PUSH_BRANCH: ${{ github.ref_name }}
+          PR_HEAD_REF: ${{ github.head_ref }}
+          PR_MERGED: ${{ github.event.pull_request.merged }}
+          DSS_AUTO_URL: ${{ secrets.DSS_AUTO_URL }}
+          DSS_AUTO_API_KEY: ${{ secrets.DSS_AUTO_API_KEY }}
+        run: python dss_workflow_helper.py
