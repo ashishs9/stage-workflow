@@ -28,12 +28,12 @@ Once your repository is ready, set up the corresponding project in Dataiku.
 1.  **Create Blank Project:** In Dataiku DSS, create a new project and set the **Project Key** to the exact same `PROJECT_ID` used in the script.
 2.  **Connect Git:** Go to **Settings > Version Control**. Link the project to your newly created private Git URL.
 3.  **Sync Master:** Perform a **Pull** from the `master` branch to bring in the `dss_workflow_helper.py` and the `PROJECT_QUALITY_CHECK` scenario.
-    *(TODO: Add starting datasets and other artifacts as needed to kick start the project)
-4.  **Create Feature Branch:**
+4.  **TODO:** Add starting datasets and other artifacts as needed to kick start the project
+5.  **Create Feature Branch:**
     * From the DSS Git interface, create a new branch named `featurex`.
     * When prompted, choose to **duplicate the project** for this branch.
-5.  **Develop & Push:** Make your changes in the `featurex` project. Once finished, use the DSS Git interface to **Push** changes to the `featurex` remote branch.
-6.  **Automated Validation:** Pushing to the feature branch automatically triggers the `PROJECT_QUALITY_CHECK` scenario. On success, an email notification is sent to both the Recipient and CC users.
+6.  **Develop & Push:** Make your changes in the `featurex` project. Once finished, use the DSS Git interface to **Push** changes to the `featurex` remote branch.
+7.  **Automated Validation:** Pushing to the feature branch automatically triggers the `PROJECT_QUALITY_CHECK` scenario. On success, an email notification is sent to both the Recipient and CC users.
 
 ---
 
