@@ -26,12 +26,32 @@ def run_workflow():
     if event == "pull_request" and is_merged:
         print(f"--- ACTION: PR MERGED. Orchestrating Deployment ---")
         deploy_via_project_deployer(client)
-    elif event == "push" or (event == "pull_request" and not is_merged):
-        branch = os.environ.get("PUSH_BRANCH") if event == "push" else os.environ.get("PR_HEAD_REF")
-        project_key = f"{BASE_PROJECT_ID}_{branch.upper().replace('/', '_')}"
-        run_test_scenario(client, project_key)
+    elif event == "push":
+        branch = os.environ.get("PUSH_BRANCH")
+        run_branch_scenario(client, branch)
+    elif event == "pull_request":
+        branch = os.environ.get("PR_HEAD_REF")
+        run_branch_scenario(client, branch)
+    elif event == "pull_request_closed":
+        print("--- ACTION: PR CLOSED WITHOUT MERGE. No DSS action required. ---")
     else:
         print(f"DEBUG: Event {event} triggered no action.")
+
+def run_branch_scenario(client, branch):
+    if not branch:
+        print("ERROR: Missing branch name for DSS scenario execution.")
+        sys.exit(1)
+
+    project_key = f"{BASE_PROJECT_ID}_{branch.upper().replace('/', '_')}"
+    run_test_scenario(client, project_key)
+
+def is_not_found_error(exc):
+    status_code = getattr(exc, "http_status", None)
+    if status_code == 404:
+        return True
+
+    message = str(exc).lower()
+    return "not found" in message or "unknown deployment" in message
 
 def deploy_via_project_deployer(client):
     try:
@@ -49,21 +69,23 @@ def deploy_via_project_deployer(client):
         
         # --- IDEMPOTENT DEPLOYMENT LOOKUP ---
         infra_id = "ashish-automation"
-        deployment_id = f"{BASE_PROJECT_ID}-on-{infra_id}"
         target_deployment = None
 
-        print(f"DEBUG: Checking if deployment '{deployment_id}' already exists...")
+        print(f"DEBUG: Checking if deployment '{DEPLOYMENT_ID}' already exists...")
         try:
             # Try to fetch the specific deployment by ID directly
-            target_deployment = deployer.get_deployment(deployment_id)
+            target_deployment = deployer.get_deployment(DEPLOYMENT_ID)
             # Access a property to verify it actually exists on the server
             target_deployment.get_settings()
-            print(f"DEBUG: Found existing deployment: {deployment_id}")
-        except Exception:
-            print(f"DEBUG: Deployment '{deployment_id}' not found. Creating new one...")
+            print(f"DEBUG: Found existing deployment: {DEPLOYMENT_ID}")
+        except Exception as exc:
+            if not is_not_found_error(exc):
+                raise
+
+            print(f"DEBUG: Deployment '{DEPLOYMENT_ID}' not found. Creating new one...")
             # If fetch fails, we create it
-            target_deployment = deployer.create_deployment(deployment_id, BASE_PROJECT_ID, infra_id, bundle_id)
-            print(f"SUCCESS: Created new deployment record: {deployment_id}")
+            target_deployment = deployer.create_deployment(DEPLOYMENT_ID, BASE_PROJECT_ID, infra_id, bundle_id)
+            print(f"SUCCESS: Created new deployment record: {DEPLOYMENT_ID}")
 
         # --- UPDATE SETTINGS ---
         print(f"DEBUG: Updating deployment settings to use bundle {bundle_id}...")

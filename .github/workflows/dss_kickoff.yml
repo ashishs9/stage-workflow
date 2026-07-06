@@ -8,11 +8,11 @@ on:
       - development
       - production
   
-  # 2. Triggered when a PR to master is opened or merged - For now just for closed merges!
+  # 2. Triggered for PR validation and merge deployment on master-bound PRs
   pull_request:
     branches:
       - master
-    types: [closed]
+    types: [opened, synchronize, reopened, closed]
 
   workflow_dispatch:
 
@@ -36,10 +36,8 @@ jobs:
           DSS_URL: ${{ secrets.DSS_URL }}
           DSS_API_KEY: ${{ secrets.DSS_API_KEY }}
           # Logic to handle different event types
-          EVENT_NAME: ${{ github.event_name }}
+          EVENT_NAME: ${{ github.event_name == 'pull_request' && github.event.action == 'closed' && github.event.pull_request.merged != true && 'pull_request_closed' || github.event_name }}
           PUSH_BRANCH: ${{ github.ref_name }}
           PR_HEAD_REF: ${{ github.head_ref }}
           PR_MERGED: ${{ github.event.pull_request.merged }}
-          DSS_AUTO_URL: ${{ secrets.DSS_AUTO_URL }}
-          DSS_AUTO_API_KEY: ${{ secrets.DSS_AUTO_API_KEY }}
         run: python dss_workflow_helper.py
