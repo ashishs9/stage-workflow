@@ -3,9 +3,10 @@ name: DSS CI-CD Hybrid Workflow
 on:
   # 1. Triggered whenever a developer pushes to a feature branch
   push:
-    branches:
-      - 'feature*'
-      - 'feature/**'
+    branches-ignore:
+      - master
+      - development
+      - production
 
   # 2. Triggered when a PR to master is closed
   pull_request:
