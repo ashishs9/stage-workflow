@@ -1,6 +1,9 @@
 import os
 import sys
+import json
+import smtplib
 import dataikuapi
+from email.message import EmailMessage
 # Import the specific Project Deployer class for v14
 from dataikuapi.dss.projectdeployer import DSSProjectDeployer
 
@@ -8,6 +11,83 @@ from dataikuapi.dss.projectdeployer import DSSProjectDeployer
 BASE_PROJECT_ID = "STRUCTUREDLEARNINGAGENTSAUTOMATION"
 SCENARIO_ID = "PROJECT_QUALITY_CHECK"
 DEPLOYMENT_ID = f"{BASE_PROJECT_ID}-on-ashish-automation" 
+
+def get_notification_targets():
+    scenario_path = os.path.join(os.path.dirname(__file__), "scenarios", f"{SCENARIO_ID}.json")
+    with open(scenario_path, "r") as f:
+        data = json.load(f)
+
+    recipients = []
+    cc_recipients = []
+
+    for step in data.get("params", {}).get("steps", []):
+        if step.get("type") != "send_report":
+            continue
+
+        config = step.get("params", {}).get("messaging", {}).get("configuration", {})
+        recipient = config.get("recipient")
+        cc_recipient = config.get("ccRecipient")
+
+        if recipient and recipient not in recipients:
+            recipients.append(recipient)
+        if cc_recipient and cc_recipient not in cc_recipients:
+            cc_recipients.append(cc_recipient)
+
+    if not recipients:
+        raise RuntimeError(f"No notification recipients found in {scenario_path}")
+
+    return recipients, cc_recipients
+
+def send_validation_email(status, bundle_id, details=""):
+    smtp_host = os.environ.get("SMTP_HOST")
+    smtp_port = int(os.environ.get("SMTP_PORT", "587"))
+    smtp_username = os.environ.get("SMTP_USERNAME")
+    smtp_password = os.environ.get("SMTP_PASSWORD")
+    smtp_from = os.environ.get("SMTP_FROM", smtp_username)
+    smtp_use_tls = os.environ.get("SMTP_USE_TLS", "true").lower() == "true"
+
+    if not smtp_host or not smtp_from:
+        print("WARNING: SMTP_HOST or SMTP_FROM is missing. Skipping email notification.")
+        return
+
+    to_recipients, cc_recipients = get_notification_targets()
+    subject = f"[{status}] DSS deployment validation for {DEPLOYMENT_ID}"
+
+    message = EmailMessage()
+    message["From"] = smtp_from
+    message["To"] = ", ".join(to_recipients)
+    if cc_recipients:
+        message["Cc"] = ", ".join(cc_recipients)
+    message["Subject"] = subject
+
+    body = [
+        f"Deployment status: {status}",
+        f"Deployment ID: {DEPLOYMENT_ID}",
+        f"Bundle ID: {bundle_id}",
+        f"Project: {BASE_PROJECT_ID}",
+    ]
+    if details:
+        body.append(f"Details: {details}")
+    message.set_content("\n".join(body))
+
+    all_recipients = to_recipients + cc_recipients
+
+    try:
+        if smtp_use_tls:
+            with smtplib.SMTP(smtp_host, smtp_port) as server:
+                server.starttls()
+                if smtp_username and smtp_password:
+                    server.login(smtp_username, smtp_password)
+                server.send_message(message, from_addr=smtp_from, to_addrs=all_recipients)
+        else:
+            with smtplib.SMTP(smtp_host, smtp_port) as server:
+                if smtp_username and smtp_password:
+                    server.login(smtp_username, smtp_password)
+                server.send_message(message, from_addr=smtp_from, to_addrs=all_recipients)
+
+        print(f"SUCCESS: Sent {status.lower()} deployment validation email to {', '.join(all_recipients)}")
+    except Exception as exc:
+        print(f"WARNING: Failed to send validation email: {exc}")
 
 def run_workflow():
     print(f"--- DSS CI/CD WORKFLOW START (API Client: {getattr(dataikuapi, '__version__', '14.5.1')}) ---")
@@ -75,11 +155,24 @@ def get_or_create_deployment(deployer, bundle_id):
         print(f"SUCCESS: Created new deployment record: {DEPLOYMENT_ID}")
         return deployment, True
 
+def wait_for_deployment_on_infra(deployer, deployment_id, infra_id, timeout_seconds=120, poll_seconds=5):
+    import time
+
+    deadline = time.time() + timeout_seconds
+    while time.time() < deadline:
+        infra_status = deployer.get_infra(infra_id).get_status()
+        deployment_ids = {deployment.id for deployment in infra_status.get_deployments()}
+        if deployment_id in deployment_ids:
+            return True
+        time.sleep(poll_seconds)
+
+    return False
+
 def deploy_via_project_deployer(client):
+    bundle_id = f"v-{os.environ.get('GITHUB_SHA', 'manual')[:7]}"
     try:
         project = client.get_project(BASE_PROJECT_ID)
-        bundle_id = f"v-{os.environ.get('GITHUB_SHA', 'manual')[:7]}"
-        
+
         print(f"DEBUG: Creating bundle {bundle_id} on Design...")
         project.export_bundle(bundle_id)
         
@@ -96,9 +189,10 @@ def deploy_via_project_deployer(client):
         # --- UPDATE SETTINGS ---
         action = "Creating" if is_new_deployment else "Updating"
         print(f"DEBUG: {action} deployment settings to use bundle {bundle_id}...")
-        settings = target_deployment.get_settings()
-        settings.get_raw()['bundleId'] = bundle_id
-        settings.save()
+        if not is_new_deployment:
+            settings = target_deployment.get_settings()
+            settings.bundle_id = bundle_id
+            settings.save(ignore_warnings=True)
 
         # --- PUSH TO AUTOMATION ---
         print(f"DEBUG: Triggering Deployer update via start_update()...")
@@ -110,16 +204,22 @@ def deploy_via_project_deployer(client):
 
         print(f"DEBUG: Waiting for Automation node activation...")
         result = update_execution.wait_for_result()
+
+        if not wait_for_deployment_on_infra(deployer, DEPLOYMENT_ID, "ashish-automation"):
+            raise RuntimeError(f"Deployment {DEPLOYMENT_ID} did not appear on infra ashish-automation after update")
         
         # Log any warnings (like Govern being offline)
         warnings = result.get("warnings", [])
         for w in warnings:
             print(f"DSS WARNING: {w.get('message')}")
 
+        send_validation_email("SUCCESS", bundle_id)
         print(f"SUCCESS: Deployment complete. {bundle_id} is ACTIVE.")
 
     except Exception as e:
         print(f"ERROR: Deployment orchestration failed: {str(e)}")
+        if bundle_id:
+            send_validation_email("FAILED", bundle_id, str(e))
         sys.exit(1)
 
 def run_test_scenario(client, project_key):
