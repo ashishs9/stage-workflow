@@ -34,12 +34,6 @@ jobs:
         env:
           DSS_URL: ${{ secrets.DSS_URL }}
           DSS_API_KEY: ${{ secrets.DSS_API_KEY }}
-          SMTP_HOST: ${{ secrets.SMTP_HOST }}
-          SMTP_PORT: ${{ secrets.SMTP_PORT }}
-          SMTP_USERNAME: ${{ secrets.SMTP_USERNAME }}
-          SMTP_PASSWORD: ${{ secrets.SMTP_PASSWORD }}
-          SMTP_FROM: ${{ secrets.SMTP_FROM }}
-          SMTP_USE_TLS: ${{ secrets.SMTP_USE_TLS }}
           EVENT_NAME: ${{ github.event_name }}
           PUSH_BRANCH: ${{ github.ref_name }}
           PR_HEAD_REF: ${{ github.head_ref }}
