@@ -46,6 +46,35 @@ def run_branch_scenario(client, branch):
     project_key = f"{BASE_PROJECT_ID}_{branch.upper().replace('/', '_')}"
     run_test_scenario(client, project_key)
 
+def is_not_found_error(exc):
+    status_code = getattr(exc, "http_status", None)
+    if status_code == 404:
+        return True
+
+    message = str(exc).lower()
+    return (
+        "not found" in message
+        or "does not exist" in message
+        or "unknown deployment" in message
+        or "notfoundexception" in message
+    )
+
+def get_or_create_deployment(deployer, bundle_id):
+    infra_id = "ashish-automation"
+    try:
+        deployment = deployer.get_deployment(DEPLOYMENT_ID)
+        deployment.get_settings()
+        print(f"DEBUG: Found existing deployment: {DEPLOYMENT_ID}")
+        return deployment, False
+    except Exception as exc:
+        if not is_not_found_error(exc):
+            raise
+
+        print(f"DEBUG: Deployment '{DEPLOYMENT_ID}' not found. Creating new one...")
+        deployment = deployer.create_deployment(DEPLOYMENT_ID, BASE_PROJECT_ID, infra_id, bundle_id)
+        print(f"SUCCESS: Created new deployment record: {DEPLOYMENT_ID}")
+        return deployment, True
+
 def deploy_via_project_deployer(client):
     try:
         project = client.get_project(BASE_PROJECT_ID)
@@ -61,24 +90,12 @@ def deploy_via_project_deployer(client):
         deployer = DSSProjectDeployer(client)
         
         # --- IDEMPOTENT DEPLOYMENT LOOKUP ---
-        infra_id = "ashish-automation"
-        target_deployment = None
-
         print(f"DEBUG: Checking if deployment '{DEPLOYMENT_ID}' already exists...")
-        try:
-            # Try to fetch the specific deployment by ID directly
-            target_deployment = deployer.get_deployment(DEPLOYMENT_ID)
-            # Access a property to verify it actually exists on the server
-            target_deployment.get_settings()
-            print(f"DEBUG: Found existing deployment: {DEPLOYMENT_ID}")
-        except Exception:
-            print(f"DEBUG: Deployment '{DEPLOYMENT_ID}' not found. Creating new one...")
-            # If fetch fails, we create it
-            target_deployment = deployer.create_deployment(DEPLOYMENT_ID, BASE_PROJECT_ID, infra_id, bundle_id)
-            print(f"SUCCESS: Created new deployment record: {DEPLOYMENT_ID}")
+        target_deployment, is_new_deployment = get_or_create_deployment(deployer, bundle_id)
 
         # --- UPDATE SETTINGS ---
-        print(f"DEBUG: Updating deployment settings to use bundle {bundle_id}...")
+        action = "Creating" if is_new_deployment else "Updating"
+        print(f"DEBUG: {action} deployment settings to use bundle {bundle_id}...")
         settings = target_deployment.get_settings()
         settings.get_raw()['bundleId'] = bundle_id
         settings.save()
