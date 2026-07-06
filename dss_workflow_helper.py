@@ -51,7 +51,12 @@ def is_not_found_error(exc):
         return True
 
     message = str(exc).lower()
-    return "not found" in message or "unknown deployment" in message
+    return (
+        "not found" in message
+        or "does not exist" in message
+        or "unknown deployment" in message
+        or "notfoundexception" in message
+    )
 
 def deploy_via_project_deployer(client):
     try:
