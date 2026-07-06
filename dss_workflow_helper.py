@@ -23,17 +23,18 @@ def run_workflow():
 
     client = dataikuapi.DSSClient(dss_url, api_key)
 
-    if event == "pull_request" and is_merged:
-        print(f"--- ACTION: PR MERGED. Orchestrating Deployment ---")
-        deploy_via_project_deployer(client)
-    elif event == "push":
+    if event == "push":
         branch = os.environ.get("PUSH_BRANCH")
         run_branch_scenario(client, branch)
     elif event == "pull_request":
         branch = os.environ.get("PR_HEAD_REF")
-        run_branch_scenario(client, branch)
-    elif event == "pull_request_closed":
-        print("--- ACTION: PR CLOSED WITHOUT MERGE. No DSS action required. ---")
+        if is_merged:
+            print("--- ACTION: PR MERGED. Running scenario before deployment ---")
+            run_branch_scenario(client, branch)
+            print("--- ACTION: PR MERGED. Orchestrating Deployment ---")
+            deploy_via_project_deployer(client)
+        else:
+            print("--- ACTION: PR CLOSED WITHOUT MERGE. No DSS action required. ---")
     else:
         print(f"DEBUG: Event {event} triggered no action.")
 
@@ -44,19 +45,6 @@ def run_branch_scenario(client, branch):
 
     project_key = f"{BASE_PROJECT_ID}_{branch.upper().replace('/', '_')}"
     run_test_scenario(client, project_key)
-
-def is_not_found_error(exc):
-    status_code = getattr(exc, "http_status", None)
-    if status_code == 404:
-        return True
-
-    message = str(exc).lower()
-    return (
-        "not found" in message
-        or "does not exist" in message
-        or "unknown deployment" in message
-        or "notfoundexception" in message
-    )
 
 def deploy_via_project_deployer(client):
     try:
@@ -83,10 +71,7 @@ def deploy_via_project_deployer(client):
             # Access a property to verify it actually exists on the server
             target_deployment.get_settings()
             print(f"DEBUG: Found existing deployment: {DEPLOYMENT_ID}")
-        except Exception as exc:
-            if not is_not_found_error(exc):
-                raise
-
+        except Exception:
             print(f"DEBUG: Deployment '{DEPLOYMENT_ID}' not found. Creating new one...")
             # If fetch fails, we create it
             target_deployment = deployer.create_deployment(DEPLOYMENT_ID, BASE_PROJECT_ID, infra_id, bundle_id)
