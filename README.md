@@ -10,15 +10,17 @@ Before starting, ensure you have the GitHub CLI (`gh`) installed and authenticat
     git clone git@github.com:ashishs9/stage-workflow.git
     cd stage-workflow
     ```
-2.  **Execute Setup Script:** Run the initialization script to generate your private project repository.
-    ```bash
-    python setup_dss_project.py
-    ```
-3.  **Provide Project Parameters:**
+2.  **Provide Project Parameters:**
     * **PROJECT_ID:** Enter a unique ID (e.g., `MY_PROJECT_01`). **Note:** You must use this exact same ID when creating the project in DSS later.
     * **Repo Name:** Choose a name for your new private GitHub repository.
     * **Emails:** Provide the Recipient and CC addresses for automated quality reports.
     * **Infra ID:** Provide the Infrastructure ID (egs ashish-automation)
+
+3.  **Execute Setup Script:** Run the initialization script to generate your private project repository.
+    ```bash
+    python setup_dss_project.py
+    ```
+
 
 ---
 
