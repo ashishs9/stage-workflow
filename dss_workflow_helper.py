@@ -2,13 +2,14 @@ import os
 import sys
 import json
 import smtplib
+from datetime import datetime, timezone
 import dataikuapi
 from email.message import EmailMessage
 # Import the specific Project Deployer class for v14
 from dataikuapi.dss.projectdeployer import DSSProjectDeployer
 
 # --- CONFIGURATION ---
-BASE_PROJECT_ID = "STRUCTUREDLEARNINGAGENTSAUTOMATION"
+BASE_PROJECT_ID = "ASHISH_TEST5"
 SCENARIO_ID = "PROJECT_QUALITY_CHECK"
 DSS_DEFAULT_INFRA = os.environ.get("DSS_DEFAULT_INFRA", "ashish-automation")
 DEPLOYMENT_ID = f"{BASE_PROJECT_ID}-on-{DSS_DEFAULT_INFRA}"
@@ -155,6 +156,20 @@ def get_or_create_deployment(deployer, bundle_id):
         print(f"SUCCESS: Created new deployment record: {DEPLOYMENT_ID}")
         return deployment, True
 
+def build_bundle_id():
+    sha = os.environ.get("GITHUB_SHA")
+    if sha:
+        return f"v-{sha[:7]}"
+
+    run_id = os.environ.get("GITHUB_RUN_ID")
+    run_attempt = os.environ.get("GITHUB_RUN_ATTEMPT")
+    if run_id:
+        attempt_suffix = f"-{run_attempt}" if run_attempt else ""
+        return f"v-run-{run_id}{attempt_suffix}"
+
+    timestamp = datetime.now(timezone.utc).strftime("%Y%m%d%H%M%S")
+    return f"v-manual-{timestamp}"
+
 def update_setting_if_present(settings, attribute_name, value):
     if hasattr(settings, attribute_name):
         current_value = getattr(settings, attribute_name)
@@ -162,6 +177,51 @@ def update_setting_if_present(settings, attribute_name, value):
             setattr(settings, attribute_name, value)
             return True
     return False
+
+def format_deployment_status(status):
+    parts = []
+    for key in ("health", "state", "message", "error", "warnings", "details"):
+        getter_name = f"get_{key}"
+        value = None
+        if hasattr(status, getter_name):
+            try:
+                value = getattr(status, getter_name)()
+            except Exception:
+                value = "<unavailable>"
+        elif hasattr(status, key):
+            value = getattr(status, key)
+        if value not in (None, "", []):
+            parts.append(f"{key}={value}")
+
+    for attr_name in ("__dict__",):
+        attr_value = getattr(status, attr_name, None)
+        if isinstance(attr_value, dict) and attr_value:
+            parts.append(f"{attr_name}={attr_value}")
+
+    for serializer_name in ("to_json", "to_dict", "as_dict"):
+        if hasattr(status, serializer_name):
+            try:
+                serialized = getattr(status, serializer_name)()
+                if serialized not in (None, "", [], {}):
+                    parts.append(f"{serializer_name}={serialized}")
+            except Exception:
+                parts.append(f"{serializer_name}=<unavailable>")
+
+    if hasattr(status, "get_raw"):
+        try:
+            raw_value = status.get_raw()
+            if raw_value not in (None, "", [], {}):
+                parts.append(f"raw={raw_value}")
+        except Exception:
+            parts.append("raw=<unavailable>")
+
+    if not parts:
+        return str(status)
+    return ", ".join(parts)
+
+def log_deployment_status(status):
+    summary = format_deployment_status(status)
+    print(f"DEBUG: Deployment status: {summary}")
 
 def sync_deployment_settings(target_deployment, bundle_id):
     settings = target_deployment.get_settings()
@@ -192,7 +252,10 @@ def ensure_update_succeeded(result):
     error = result.get("error")
     if isinstance(error, bool):
         if error:
-            print(f"DEBUG: Project Deployer returned error=True; continuing because deployment state is handled separately (state={state or 'unknown'}).")
+            print(
+                "DEBUG: Project Deployer returned error=True; "
+                "continuing because deployment completion is verified separately."
+            )
         return
 
     if error not in (None, False):
@@ -201,18 +264,27 @@ def ensure_update_succeeded(result):
     if result.get("fatal"):
         raise RuntimeError(f"Project Deployer update reported a fatal condition: {result.get('fatal')}")
 
-def wait_for_deployment_on_infra(deployer, deployment_id, infra_id, timeout_seconds=120, poll_seconds=5):
+def wait_for_deployment_health(deployment, timeout_seconds=180, poll_seconds=5):
     import time
 
     deadline = time.time() + timeout_seconds
     while time.time() < deadline:
-        infra_status = deployer.get_infra(infra_id).get_status()
-        deployment_ids = {deployment.id for deployment in infra_status.get_deployments()}
-        if deployment_id in deployment_ids:
+        status = deployment.get_status()
+        health = status.get_health()
+        print(f"DEBUG: Deployment health is {health}")
+        if health == "ERROR":
+            log_deployment_status(status)
+            raise RuntimeError(f"Deployment entered ERROR health: {format_deployment_status(status)}")
+        if health == "HEALTHY":
             return True
         time.sleep(poll_seconds)
 
-    return False
+    status = deployment.get_status()
+    log_deployment_status(status)
+    raise RuntimeError(
+        f"Deployment did not become HEALTHY within {timeout_seconds}s. "
+        f"Last status: {format_deployment_status(status)}"
+    )
 
 def wait_for_project_on_automation(client, project_key, timeout_seconds=180, poll_seconds=5):
     import time
@@ -221,13 +293,15 @@ def wait_for_project_on_automation(client, project_key, timeout_seconds=180, pol
     last_error = None
     while time.time() < deadline:
         try:
-            project = client.get_project(project_key)
-            info = project.get_info()
-            if isinstance(info, dict) and info.get("projectKey") not in (None, project_key):
-                raise RuntimeError(
-                    f"Unexpected project key from automation node: {info.get('projectKey')}"
-                )
-            return True
+            projects = client.list_projects()
+            for project in projects:
+                if isinstance(project, dict):
+                    current_key = project.get("projectKey") or project.get("project_key")
+                else:
+                    current_key = getattr(project, "projectKey", None) or getattr(project, "project_key", None)
+
+                if current_key == project_key:
+                    return True
         except Exception as exc:
             if not is_not_found_error(exc):
                 raise
@@ -239,12 +313,13 @@ def wait_for_project_on_automation(client, project_key, timeout_seconds=180, pol
     return False
 
 def deploy_via_project_deployer(client):
-    bundle_id = f"v-{os.environ.get('GITHUB_SHA', 'manual')[:7]}"
+    bundle_id = build_bundle_id()
     try:
         auto_url = os.environ.get("DSS_AUTO_URL")
         auto_api_key = os.environ.get("DSS_AUTO_API_KEY")
+        verify_automation_node = os.environ.get("VERIFY_AUTOMATION_NODE", "false").lower() == "true"
         automation_client = None
-        if auto_url:
+        if auto_url and verify_automation_node:
             if not auto_api_key:
                 raise RuntimeError("Missing DSS_AUTO_API_KEY for automation-node validation.")
             automation_client = dataikuapi.DSSClient(auto_url, auto_api_key)
@@ -280,16 +355,16 @@ def deploy_via_project_deployer(client):
         result = update_execution.wait_for_result()
         ensure_update_succeeded(result)
 
+        if not wait_for_deployment_health(target_deployment):
+            raise RuntimeError(
+                f"Deployment {DEPLOYMENT_ID} did not reach HEALTHY state after update"
+            )
+
         if automation_client:
             print(f"DEBUG: Verifying deployment directly on automation node at {auto_url}...")
             if not wait_for_project_on_automation(automation_client, BASE_PROJECT_ID):
                 raise RuntimeError(
                     f"Project {BASE_PROJECT_ID} did not appear on automation node {auto_url} after deployer update"
-                )
-        else:
-            if not wait_for_deployment_on_infra(deployer, DEPLOYMENT_ID, DSS_DEFAULT_INFRA):
-                raise RuntimeError(
-                    f"Deployment {DEPLOYMENT_ID} did not appear on infra {DSS_DEFAULT_INFRA} after update"
                 )
         
         # Log any warnings (like Govern being offline)
