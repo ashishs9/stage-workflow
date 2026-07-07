@@ -1,6 +1,7 @@
 # README: DSS CI/CD Workflow Guide
 
 This document outlines a standardized process for creating, developing, and deploying Dataiku DSS projects using the `stage-workflow` template. The intent is to use a template for 2 workflows. 
+
 The first workflow is triggered on a push to a feature branch, that kicks off a scenario to validate PAT. The second workflow is triggered with contents from the feature branch are merged to main. 
 
 ## 1. Initializing a New Repo
