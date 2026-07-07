@@ -29,9 +29,10 @@ Once the repository is created, you must configure the environment variables and
 
 1.  **Navigate to GitHub Settings:** Go to your new repository on GitHub and select **Settings > Secrets and variables > Actions**.
 2.  **Add Repository Secrets:** Create the following secrets to secure your credentials:
-    * `DSS_API_KEY`: The API key generated from your DSS user profile or administration settings.
+    * `DSS_API_KEY`: The API key generated from your DSS user profile - Make sure its a personal API key.
     * `DSS_URL`: The base URL of your Design node (e.g., `https://dss-design.yourcompany.com`).
     * `DSS_AUTO_URL`: The base URL of your Automation node (for deployment).
+    * `DSS_AUTO_API_KEY`: The API Key generated on your Automation node (for deployment).
 
 ---
 
@@ -66,6 +67,6 @@ After validation is complete, the changes must be promoted to the production-rea
 | Stage | Action | Outcome |
 | :--- | :--- | :--- |
 | **Setup** | Run Python Script | Private Repo created with Skeleton |
-| **Config** | Set Secrets/Vars | Credentials secured for API calls |
+| **Config** | Set Secrets/Vars | Credentials secured for API calls in new repo |
 | **Dev** | Push to `featurex` | Scenario runs & sends validation email |
 | **Deploy** | Merge to `master` | Project bundled and pushed to Automation Node |
