@@ -236,7 +236,12 @@ def deploy_via_project_deployer(client):
     bundle_id = f"v-{os.environ.get('GITHUB_SHA', 'manual')[:7]}"
     try:
         auto_url = os.environ.get("DSS_AUTO_URL")
-        automation_client = dataikuapi.DSSClient(auto_url, os.environ["DSS_API_KEY"]) if auto_url else None
+        auto_api_key = os.environ.get("DSS_AUTO_API_KEY")
+        automation_client = None
+        if auto_url:
+            if not auto_api_key:
+                raise RuntimeError("Missing DSS_AUTO_API_KEY for automation-node validation.")
+            automation_client = dataikuapi.DSSClient(auto_url, auto_api_key)
         project = client.get_project(BASE_PROJECT_ID)
 
         print(f"DEBUG: Creating bundle {bundle_id} on Design...")
