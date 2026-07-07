@@ -34,6 +34,7 @@ jobs:
       - name: Execute DSS Logic
         env:
           DSS_URL: ${{ secrets.DSS_URL }}
+          DSS_AUTO_URL: ${{ secrets.DSS_AUTO_URL }}
           DSS_API_KEY: ${{ secrets.DSS_API_KEY }}
           EVENT_NAME: ${{ github.event_name }}
           PUSH_BRANCH: ${{ github.ref_name }}

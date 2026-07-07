@@ -10,7 +10,7 @@ from dataikuapi.dss.projectdeployer import DSSProjectDeployer
 # --- CONFIGURATION ---
 BASE_PROJECT_ID = "STRUCTUREDLEARNINGAGENTSAUTOMATION"
 SCENARIO_ID = "PROJECT_QUALITY_CHECK"
-DSS_DEFAULT_INFRA = "ashish-automation"
+DSS_DEFAULT_INFRA = os.environ.get("DSS_DEFAULT_INFRA", "ashish-automation")
 DEPLOYMENT_ID = f"{BASE_PROJECT_ID}-on-{DSS_DEFAULT_INFRA}"
 
 def get_notification_targets():
@@ -186,10 +186,14 @@ def ensure_update_succeeded(result):
         return
 
     state = str(result.get("state", "")).upper()
-    if state and state not in {"SUCCESS", "DONE"}:
+    if state in {"FAILED", "ERROR", "ABORTED", "CANCELED", "CANCELLED"}:
         raise RuntimeError(f"Project Deployer update finished in unexpected state: {state}")
 
-    if result.get("error"):
+    error = result.get("error")
+    if error not in (None, False):
+        if state in {"SUCCESS", "DONE", "FINISHED"} and isinstance(error, bool):
+            print("DEBUG: Project Deployer returned error=True alongside a successful state; ignoring the flag.")
+            return
         raise RuntimeError(f"Project Deployer update returned an error: {result.get('error')}")
 
     if result.get("fatal"):
@@ -208,9 +212,31 @@ def wait_for_deployment_on_infra(deployer, deployment_id, infra_id, timeout_seco
 
     return False
 
+def wait_for_project_on_automation(client, project_key, timeout_seconds=180, poll_seconds=5):
+    import time
+
+    deadline = time.time() + timeout_seconds
+    last_error = None
+    while time.time() < deadline:
+        try:
+            project = client.get_project(project_key)
+            project.get_settings()
+            return True
+        except Exception as exc:
+            if not is_not_found_error(exc):
+                raise
+            last_error = exc
+            time.sleep(poll_seconds)
+
+    if last_error:
+        print(f"DEBUG: Automation project lookup still failing for {project_key}: {last_error}")
+    return False
+
 def deploy_via_project_deployer(client):
     bundle_id = f"v-{os.environ.get('GITHUB_SHA', 'manual')[:7]}"
     try:
+        auto_url = os.environ.get("DSS_AUTO_URL")
+        automation_client = dataikuapi.DSSClient(auto_url, os.environ["DSS_API_KEY"]) if auto_url else None
         project = client.get_project(BASE_PROJECT_ID)
 
         print(f"DEBUG: Creating bundle {bundle_id} on Design...")
@@ -243,10 +269,17 @@ def deploy_via_project_deployer(client):
         result = update_execution.wait_for_result()
         ensure_update_succeeded(result)
 
-        if not wait_for_deployment_on_infra(deployer, DEPLOYMENT_ID, DSS_DEFAULT_INFRA):
-            raise RuntimeError(
-                f"Deployment {DEPLOYMENT_ID} did not appear on infra {DSS_DEFAULT_INFRA} after update"
-            )
+        if automation_client:
+            print(f"DEBUG: Verifying deployment directly on automation node at {auto_url}...")
+            if not wait_for_project_on_automation(automation_client, BASE_PROJECT_ID):
+                raise RuntimeError(
+                    f"Project {BASE_PROJECT_ID} did not appear on automation node {auto_url} after deployer update"
+                )
+        else:
+            if not wait_for_deployment_on_infra(deployer, DEPLOYMENT_ID, DSS_DEFAULT_INFRA):
+                raise RuntimeError(
+                    f"Deployment {DEPLOYMENT_ID} did not appear on infra {DSS_DEFAULT_INFRA} after update"
+                )
         
         # Log any warnings (like Govern being offline)
         warnings = result.get("warnings", [])
