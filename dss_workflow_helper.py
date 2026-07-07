@@ -222,7 +222,11 @@ def wait_for_project_on_automation(client, project_key, timeout_seconds=180, pol
     while time.time() < deadline:
         try:
             project = client.get_project(project_key)
-            project.get_settings()
+            info = project.get_info()
+            if isinstance(info, dict) and info.get("projectKey") not in (None, project_key):
+                raise RuntimeError(
+                    f"Unexpected project key from automation node: {info.get('projectKey')}"
+                )
             return True
         except Exception as exc:
             if not is_not_found_error(exc):
