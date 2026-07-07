@@ -10,7 +10,8 @@ from dataikuapi.dss.projectdeployer import DSSProjectDeployer
 # --- CONFIGURATION ---
 BASE_PROJECT_ID = "STRUCTUREDLEARNINGAGENTSAUTOMATION"
 SCENARIO_ID = "PROJECT_QUALITY_CHECK"
-DEPLOYMENT_ID = f"{BASE_PROJECT_ID}-on-ashish-automation" 
+DSS_DEFAULT_INFRA = "ashish-automation"
+DEPLOYMENT_ID = f"{BASE_PROJECT_ID}-on-{DSS_DEFAULT_INFRA}"
 
 def get_notification_targets():
     scenario_path = os.path.join(os.path.dirname(__file__), "scenarios", f"{SCENARIO_ID}.json")
@@ -140,7 +141,6 @@ def is_not_found_error(exc):
     )
 
 def get_or_create_deployment(deployer, bundle_id):
-    infra_id = "ashish-automation"
     try:
         deployment = deployer.get_deployment(DEPLOYMENT_ID)
         deployment.get_settings()
@@ -151,9 +151,49 @@ def get_or_create_deployment(deployer, bundle_id):
             raise
 
         print(f"DEBUG: Deployment '{DEPLOYMENT_ID}' not found. Creating new one...")
-        deployment = deployer.create_deployment(DEPLOYMENT_ID, BASE_PROJECT_ID, infra_id, bundle_id)
+        deployment = deployer.create_deployment(DEPLOYMENT_ID, BASE_PROJECT_ID, DSS_DEFAULT_INFRA, bundle_id)
         print(f"SUCCESS: Created new deployment record: {DEPLOYMENT_ID}")
         return deployment, True
+
+def update_setting_if_present(settings, attribute_name, value):
+    if hasattr(settings, attribute_name):
+        current_value = getattr(settings, attribute_name)
+        if current_value != value:
+            setattr(settings, attribute_name, value)
+            return True
+    return False
+
+def sync_deployment_settings(target_deployment, bundle_id):
+    settings = target_deployment.get_settings()
+    changed = False
+
+    changed = update_setting_if_present(settings, "bundle_id", bundle_id) or changed
+    changed = update_setting_if_present(settings, "infra_id", DSS_DEFAULT_INFRA) or changed
+    changed = update_setting_if_present(settings, "project_key", BASE_PROJECT_ID) or changed
+    changed = update_setting_if_present(settings, "project_id", BASE_PROJECT_ID) or changed
+
+    if changed:
+        print(
+            f"DEBUG: Saving deployment settings for bundle={bundle_id}, "
+            f"infra={DSS_DEFAULT_INFRA}, project={BASE_PROJECT_ID}..."
+        )
+        settings.save(ignore_warnings=True)
+    else:
+        print("DEBUG: Deployment settings already match the expected bundle and infra.")
+
+def ensure_update_succeeded(result):
+    if not isinstance(result, dict):
+        return
+
+    state = str(result.get("state", "")).upper()
+    if state and state not in {"SUCCESS", "DONE"}:
+        raise RuntimeError(f"Project Deployer update finished in unexpected state: {state}")
+
+    if result.get("error"):
+        raise RuntimeError(f"Project Deployer update returned an error: {result.get('error')}")
+
+    if result.get("fatal"):
+        raise RuntimeError(f"Project Deployer update reported a fatal condition: {result.get('fatal')}")
 
 def wait_for_deployment_on_infra(deployer, deployment_id, infra_id, timeout_seconds=120, poll_seconds=5):
     import time
@@ -188,11 +228,8 @@ def deploy_via_project_deployer(client):
 
         # --- UPDATE SETTINGS ---
         action = "Creating" if is_new_deployment else "Updating"
-        print(f"DEBUG: {action} deployment settings to use bundle {bundle_id}...")
-        if not is_new_deployment:
-            settings = target_deployment.get_settings()
-            settings.bundle_id = bundle_id
-            settings.save(ignore_warnings=True)
+        print(f"DEBUG: {action} deployment settings to use bundle {bundle_id} on infra {DSS_DEFAULT_INFRA}...")
+        sync_deployment_settings(target_deployment, bundle_id)
 
         # --- PUSH TO AUTOMATION ---
         print(f"DEBUG: Triggering Deployer update via start_update()...")
@@ -204,9 +241,12 @@ def deploy_via_project_deployer(client):
 
         print(f"DEBUG: Waiting for Automation node activation...")
         result = update_execution.wait_for_result()
+        ensure_update_succeeded(result)
 
-        if not wait_for_deployment_on_infra(deployer, DEPLOYMENT_ID, "ashish-automation"):
-            raise RuntimeError(f"Deployment {DEPLOYMENT_ID} did not appear on infra ashish-automation after update")
+        if not wait_for_deployment_on_infra(deployer, DEPLOYMENT_ID, DSS_DEFAULT_INFRA):
+            raise RuntimeError(
+                f"Deployment {DEPLOYMENT_ID} did not appear on infra {DSS_DEFAULT_INFRA} after update"
+            )
         
         # Log any warnings (like Govern being offline)
         warnings = result.get("warnings", [])
