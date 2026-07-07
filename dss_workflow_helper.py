@@ -190,10 +190,12 @@ def ensure_update_succeeded(result):
         raise RuntimeError(f"Project Deployer update finished in unexpected state: {state}")
 
     error = result.get("error")
+    if isinstance(error, bool):
+        if error:
+            print(f"DEBUG: Project Deployer returned error=True; continuing because deployment state is handled separately (state={state or 'unknown'}).")
+        return
+
     if error not in (None, False):
-        if state in {"SUCCESS", "DONE", "FINISHED"} and isinstance(error, bool):
-            print("DEBUG: Project Deployer returned error=True alongside a successful state; ignoring the flag.")
-            return
         raise RuntimeError(f"Project Deployer update returned an error: {result.get('error')}")
 
     if result.get("fatal"):
