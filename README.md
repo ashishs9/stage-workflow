@@ -73,3 +73,7 @@ After validation is complete, the changes must be promoted to the production-rea
 | **Config** | Set Secrets/Vars | Credentials secured for API calls in new repo |
 | **Dev** | Push to `featurex` | Scenario runs & sends validation email |
 | **Deploy** | Merge to `master` | Project bundled and pushed to Automation Node |
+
+### Workflow Diagram
+
+![DSS CI/CD workflow diagram](docs/workflow-sample.svg)
