@@ -15,7 +15,7 @@ Before starting, ensure you have the GitHub CLI (`gh`) installed and authenticat
     cd stage-workflow
     ```
     
-3.  **Execute Setup Script:** Run the initialization script to generate your private project repository.
+3.  **Execute Setup Script:** Run the initialization script to generate your private github repository for the specific project.
     ```bash
     python setup_dss_project.py
     ```
