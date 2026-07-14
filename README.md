@@ -1,6 +1,8 @@
 # README: DSS CI/CD Workflow Guide
 
-This document outlines a standardized process for creating, developing, and deploying Dataiku DSS projects using the `stage-workflow` template. The intent is to use a template for 2 workflows. 
+This document outlines a standardized process for creating, developing, and deploying Dataiku DSS projects using the `stage-workflow` template. The intent is to use a github template for 2 workflows. 
+
+A github repo is initialized with the script. A blank DSS project is configured for this git repo to pull in standard artifacts like scenario runs, datasets, etc. 
 
 The first workflow is triggered on a push to a feature branch, that kicks off a scenario to validate PAT. The second workflow is triggered when code from the feature branch are merged to main. 
 
