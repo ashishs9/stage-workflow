@@ -73,6 +73,7 @@ After validation is complete, the changes must be promoted to the production-rea
 | :--- | :--- | :--- |
 | **Setup** | Run Python Script | Private Repo created with Skeleton |
 | **Config** | Set Secrets/Vars | Credentials secured for API calls in new repo |
+| **Dev** | Init project and connect to git repo | Continue development on project|
 | **Dev** | Push to `featurex` | Scenario runs & sends validation email |
 | **Deploy** | Merge to `master` | Project bundled and pushed to Automation Node |
 
